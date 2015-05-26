@@ -61,12 +61,13 @@ public class SimpleGrizzlyAdapterChain extends HttpHandler {
     );
     timingsLogger.enterTimedArea();
     RequestScope.enter(request, timingsLogger);
+    final String probeKey = ConnectionProbeTimingLogger.makeKey(request.getRequest().getConnection());
     RequestScope.addAfterServiceTask(new Callable<Void>() {
       @Override
       public Void call() throws Exception {
         timingsLogger.leaveTimedArea();
         if (probe != null && !NO_REQUEST_ID.equals(requestId)) {
-          probe.endUserRequest(requestId, request.getRequest().getConnection());
+          probe.endUserRequest(requestId, probeKey);
         }
         return null;
       }

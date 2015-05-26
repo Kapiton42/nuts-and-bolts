@@ -40,11 +40,11 @@ public class ConnectionProbeTimingLogger implements ConnectionProbe {
   }
   
   @SuppressWarnings("ConstantConditions")
-  private void dumpTimings(Connection clientConnection, long closeProbe, boolean error, String errorMessage) {
-    Long startAccept = timingRecords.get(makeProbeKey(clientConnection, Probe.ACCEPT));
+  private void dumpTimings(String key, long closeProbe, boolean error, String errorMessage) {
+    Long startAccept = timingRecords.get(makeProbeKey(key, Probe.ACCEPT));
     long total = startAccept != null ? closeProbe - startAccept : -1;
     if (total > tolerance) {
-      String rid = rids.get(makeKey(clientConnection));
+      String rid = rids.get(key);
       if (rid == null) {
         return;
       }
@@ -58,7 +58,7 @@ public class ConnectionProbeTimingLogger implements ConnectionProbe {
             continue;
           }
           
-          Long time = timingRecords.get(makeProbeKey(clientConnection, p));
+          Long time = timingRecords.get(makeProbeKey(key, p));
           if (time == null) {
             continue;
           }          
@@ -79,12 +79,12 @@ public class ConnectionProbeTimingLogger implements ConnectionProbe {
     }
   }
 
-  public void endUserRequest(String requestId, Connection clientConnection) {
-    if (requestId == null || timingRecords.get(makeProbeKey(clientConnection, Probe.ACCEPT)) == null) {
+  public void endUserRequest(String requestId, String peerAddress) {
+    if (requestId == null || timingRecords.get(makeProbeKey(peerAddress, Probe.ACCEPT)) == null) {
       return;
     }
-    rids.put(makeKey(clientConnection), requestId);
-    probe(clientConnection, Probe.END_USER_REQUEST);
+    rids.put(peerAddress, requestId);
+    probe(peerAddress, Probe.END_USER_REQUEST);
   }
       
   @Override
@@ -109,49 +109,53 @@ public class ConnectionProbeTimingLogger implements ConnectionProbe {
 
   @Override
   public void onErrorEvent(Connection connection, Throwable error) {
-    end(connection, true, error.getMessage());
+    end(makeKey(connection), true, error.getMessage());
   }
 
   @Override
   public void onCloseEvent(Connection connection) {
-    end(connection, false, null);
+    end(makeKey(connection), false, null);
   }
   
   @Override
   public void onIOEventReadyEvent(Connection connection, IOEvent ioEvent) {}
 
-  private void clear(Connection clientConnection) {
+  private void clear(String key) {
     for (Probe probe : Probe.values()) {
-      timingRecords.remove(makeProbeKey(clientConnection, probe));
+      timingRecords.remove(makeProbeKey(key, probe));
     }
-    rids.remove(makeKey(clientConnection));
+    rids.remove(key);
   }
 
-  private void end(Connection connection, boolean error, String errorMessage) {
+  private void end(String key, boolean error, String errorMessage) {
     try {
       int ts = timingRecords.size();
       if (ts > LOG_THRESHOLD) {
         logger.warn(TCP_MARKER, "timingsRecords map too large: " + String.valueOf(ts));
       }
-      dumpTimings(connection, System.currentTimeMillis(), error, errorMessage);
+      dumpTimings(key, System.currentTimeMillis(), error, errorMessage);
     } finally {
-      clear(connection);
+      clear(key);
     }
   }
   
   private void probe(Connection clientConnection, Probe stage) {
-    timingRecords.put(makeProbeKey(clientConnection, stage), System.currentTimeMillis());
+    probe(makeKey(clientConnection), stage);
   }
-  
+
+  private void probe(String key, Probe stage) {
+    timingRecords.put(makeProbeKey(key, stage), System.currentTimeMillis());
+  }
+
   private static String format(String t, Object... args) {
     return  MessageFormatter.arrayFormat(t, args).getMessage();
   }
 
-  private static String makeProbeKey(Connection clientConnection, Probe probe) {
-    return makeKey(clientConnection) + probe.name();
+  private static String makeProbeKey(String peerAddress, Probe probe) {
+    return peerAddress + probe.name();
   }
 
-  private static String makeKey(Connection clientConnection) {
+  public static String makeKey(Connection clientConnection) {
     return clientConnection.getPeerAddress().toString();
   }
 
