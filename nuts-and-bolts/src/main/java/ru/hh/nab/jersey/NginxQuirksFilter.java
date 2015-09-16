@@ -14,6 +14,7 @@ public class NginxQuirksFilter implements ResourceFilter {
       if (response.getEntity() == null) {
         response.setEntity(" ".getBytes());
         response.getHttpHeaders().putSingle(HttpHeaders.CONTENT_TYPE, "text/plain");
+        response.getHttpHeaders().putSingle("X-Accel-Buffering", "no");
       }
       return response;
     }
